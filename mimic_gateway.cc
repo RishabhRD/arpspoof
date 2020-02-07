@@ -32,6 +32,55 @@ struct arp_header {
 	in_addr_t  target_ip;
 };
 #pragma pack()
+int get_if_ip4(const char *ipname, uint32_t *ip) {
+	inet_pton(AF_INET, ipname, ip);
+	return 0;
+}
+
+int get_if_info(const char *ifname, uint32_t *ip, char *mac, int *ifindex,const char *ip_name)
+{
+	int err = -1;
+	struct ifreq ifr;
+	int sd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ARP));
+	if (sd <= 0) {
+		perror("socket()");
+		goto out;
+	}
+	if (strlen(ifname) > (IFNAMSIZ - 1)) {
+		printf("Too long interface name, MAX=%i\n", IFNAMSIZ - 1);
+		goto out;
+	}
+
+	strcpy(ifr.ifr_name, ifname);
+
+	//Get interface index using name
+	if (ioctl(sd, SIOCGIFINDEX, &ifr) == -1) {
+		perror("SIOCGIFINDEX");
+		goto out;
+	}
+	*ifindex = ifr.ifr_ifindex;
+	printf("interface index is %d\n", *ifindex);
+
+	//Get MAC address of the interface
+	if (ioctl(sd, SIOCGIFHWADDR, &ifr) == -1) {
+		perror("SIOCGIFINDEX");
+		goto out;
+	}
+
+	//Copy mac address to output
+	memcpy(mac, ifr.ifr_hwaddr.sa_data, MAC_LENGTH);
+
+	if (get_if_ip4(ip_name, ip)) {
+		goto out;
+	}
+
+	err = 0;
+out:
+	if (sd > 0) {
+		close(sd);
+	}
+	return err;
+}
 int main(int argc, char** argv){
 
 	if (argc < 4)
@@ -72,6 +121,8 @@ int main(int argc, char** argv){
 	 */
 	strncpy(ifopts.ifr_name, argv[3], IFNAMSIZ - 1);
 	ioctl(fd, SIOCGIFFLAGS, &ifopts);
+	ifopts.ifr_flags |= IFF_PROMISC;
+	ioctl(fd, SIOCSIFFLAGS, &ifopts);
 	/* Allow the socket to be reused - incase connection is closed prematurely */
 	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &sockopt, sizeof sockopt) == -1)
 	{
@@ -132,7 +183,14 @@ int main(int argc, char** argv){
 	arp->sender_mac[5] = ifr.ifr_hwaddr.sa_data[5];
 	struct sockaddr_ll sadr_ll;
 	memset(&sadr_ll,0,sizeof(struct sockaddr_ll));
-	sadr_ll.sll_ifindex = ifopts.ifr_ifindex; // index of interface
+	uint32_t src;
+	char mac[6];
+	int ifindex;
+	const char* ifname = argv[3];
+	const char* ip_name = argv[1];
+	if (get_if_info(ifname, &src, mac, &ifindex,ip_name)) {
+	}
+	sadr_ll.sll_ifindex = ifindex; // index of interface
 	sadr_ll.sll_halen = 6; // length of destination mac address
 	sadr_ll.sll_addr[0] = 0xff;
 	sadr_ll.sll_addr[1] = 0xff;
@@ -145,6 +203,8 @@ int main(int argc, char** argv){
 	while (1)
 	{
 		if(sendto(fd,(const void*)buffer,(sizeof(ethhdr)+sizeof(struct arp_header)),0,(const struct sockaddr*)&sadr_ll,saddr_len)<0){
+			char buf[50];
+			perror(buf);
 			cout<<"Could not send"<<endl;
 		}
 	}
