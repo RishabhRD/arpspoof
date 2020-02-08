@@ -33,7 +33,7 @@ int out(int *sockfd){
 	return -1;
 }
 int socket_bind_arp(int iface_index,int *sockfd){
-	printf("entered socket_bind_arp");
+	printf("entered socket_bind_arp\n");
 	int err =0;
 
 	printf("starting binding of socket for listening to arp request");
@@ -91,32 +91,34 @@ int listen_arp(int *sockfd,const char *mac_addr,const char *ip_addr,int *iface_i
 	char buff[100];
 	memset(buff,0,sizeof(buff));
 	int err =0;
-	ssize_t len=recvfrom(*sockfd,buff,sizeof(buff),0,NULL,NULL);
-	if(len==-1)
-	{
-		printf("error recv_from");
-		return out(sockfd);
-	}
+	while(1){
+		ssize_t len=recvfrom(*sockfd,buff,sizeof(buff),0,NULL,NULL);
+		if(len==-1)
+		{
+			printf("error recv_from");
+			return out(sockfd);
+		}
 
-	struct ethhdr *recv_req = (struct ethhdr *) buff;
-	struct arp_header *arp_req = (struct arp_header *) (buff + 14);								
-	if(ntohs(recv_req->h_proto)!= PROTO_ARP)
-	{
-		printf("error not arp packet");
-		return out(sockfd);
-	}
-	if(ntohs(arp_req->opcode)!=ARP_REQUEST)
-	{
-		printf("not a request packet");
-		return out(sockfd);
+		struct ethhdr *recv_req = (struct ethhdr *) buff;
+		struct arp_header *arp_req = (struct arp_header *) (buff + 14);								
+		if(ntohs(recv_req->h_proto)!= PROTO_ARP)
+		{
+			printf("error not arp packet");
+			return out(sockfd);
+		}
+		if(ntohs(arp_req->opcode)!=ARP_REQUEST)
+		{
+			printf("not a request packet");
+			return out(sockfd);
 
+		}
+		err = send_arp_reply(sockfd,buff,mac_addr,ip_addr,iface_index);
 	}
-	err = send_arp_reply(sockfd,buff,mac_addr,ip_addr,iface_index);
-
 	return err;
 }
 int main(int argc ,char **argv){
-	if(argc != 2) exit(0);
+	printf("%d\n",argc);
+	if(argc != 4) exit(0);
 
 	const char *interface_name = argv[3];
 	const char *mac_addr = argv[1];
@@ -124,21 +126,31 @@ int main(int argc ,char **argv){
 
 	int sockfd;
 	struct ifreq ifr;
-	while(1){
-		strcpy(ifr.ifr_name,interface_name);
-		int iface_index;
-		sockfd = socket(AF_PACKET,SOCK_RAW,htons(ETH_P_ARP));
-		if(sockfd < 1) {
-			printf("socket creation failed");
-			return 0;
-		}
-		if (ioctl(sockfd, SIOCGIFINDEX, &ifr) == -1) {
-			perror("SIOCGIFINDEX");
-			return 0;
-		}
-		iface_index = ifr.ifr_ifindex; 	
-		if(socket_bind_arp(iface_index,&sockfd)  != 0) return 0;
-		if(listen_arp(&sockfd,mac_addr,ipv4_addr,&iface_index) != 0) return 0;
+	sockfd = socket(AF_PACKET,SOCK_RAW,htons(ETH_P_ARP));
+	strcpy(ifr.ifr_name,interface_name);
+	int iface_index;
+	if(sockfd < 0) {
+		printf("socket creation failed");
+		return 0;
 	}
+	if (ioctl(sockfd, SIOCGIFINDEX, &ifr) == -1) {
+		perror("SIOCGIFINDEX");
+		return 0;
+	}
+	iface_index = ifr.ifr_ifindex; 	
+	if(socket_bind_arp(iface_index,&sockfd)  != 0) {
+		char error[100];
+		perror(error);
+		return 0;
+	}
+	printf("Here\n");
+	int val = listen_arp(&sockfd,mac_addr,ipv4_addr,&iface_index);
+		if(val!=0) {
+			printf("while listening: ");
+			char error[100];
+			perror(error);
+			return 0;
+		}
+		printf("There\n");
 }
 
