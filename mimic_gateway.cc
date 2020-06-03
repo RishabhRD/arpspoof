@@ -85,7 +85,7 @@ int main(int argc, char** argv){
 
 	if (argc < 4)
 	{
-		cout << "Give Interface name on which you want to listen." << endl;
+		cout << "Syntax: mimic_gateway <src> <dest> <interface>" << endl;
 		return 0;
 	}
 
