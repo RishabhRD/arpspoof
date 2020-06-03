@@ -207,5 +207,6 @@ int main(int argc, char** argv){
 			perror(buf);
 			cout<<"Could not send"<<endl;
 		}
+		sleep(1);
 	}
 }
