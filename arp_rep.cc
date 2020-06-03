@@ -114,9 +114,9 @@ int send_arp_reply(int *sockfd,const char *buff,struct ifreq *ifr,int *ifaceinde
 	socket_address.sll_addr[7] = 0x00;
 	char sendBuffer[100];
 	struct ethhdr* src_eth = (struct ethhdr*) buff;
-	struct arp_header* src_arp = (struct arp_header*) (buff+14);
+	struct arp_header* src_arp = (struct arp_header*) (src_eth+1);
 	struct ethhdr *send_eth = (struct ethhdr *) sendBuffer;
-	struct arp_header *arp_rep = (struct arp_header *) (sendBuffer + 14);
+	struct arp_header *arp_rep = (struct arp_header *) (send_eth+1);
 
 	send_eth->h_dest[0] = src_eth->h_source[0];
 	send_eth->h_dest[1] = src_eth->h_source[1];
